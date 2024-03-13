@@ -1,4 +1,9 @@
 ```{r}
+library("shinyjs")
+```
+
+
+```{r}
 library(tidyverse)
 library(reactable) # The important package
 library(htmltools)
@@ -105,93 +110,48 @@ format_population <- function(value) {
 ```{r}
 ui <- dashboardPage(
   dashboardHeader(title = "Life Expectancy Dashboard"),
-  dashboardSidebar(),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Visualization", tabName = "visualization", icon = icon("chart-bar"))
+    )
+  ),
   dashboardBody(
-    fluidRow(
-      box(
-        width = 20,
-        title = "Life Expectancy Map",
-        leafletOutput("life_expectancy_map")
-      ),
-      box(
-        width = 6,
-        title = "Life Expectancy Plot",
-        plotOutput("life_expectancy_plot")
-      ),
-      box(
-        width = 6,
-        title = "Life Expectancy Table",
-        reactableOutput("life_expectancy_table")
-      )
-    ),
-    tabPanel("Additional Plots",
-      fluidRow(
-        # Sidebar for Additional Plots tab
-        sidebarPanel(
-          selectInput("selected_countries", "Select Countries", 
-                      choices = unique(life_clean$Country), 
-                      selected = c("Australia", "Germany", "Israel", "Afghanistan", "Nigeria", "Indonesia"),
-                      multiple = TRUE)
-        ),
-        box(
-          width = 6,
-          height = 600,
-          title = "Developed Countries Plot 1",
-          plotOutput("developed_plot_1")
+    tabItems(
+      # Visualization tab
+      tabItem(
+        tabName = "visualization",
+        fluidRow(
+          box(
+            width = 20,
+            title = "Visualization",
+            navbarPage(
+              "Tabs",
+              tabPanel("Life Expectancy Table", reactableOutput("life_expectancy_table")),
+              tabPanel("Life Expectancy Map", leafletOutput("life_expectancy_map")),
+              tabPanel("Life Expectancy Plot", 
+                       plotOutput("life_expectancy_plot"),
+                       sliderInput("year_range", "Select Year Range:",
+                                   min = min(life_clean$Year),
+                                   max = max(life_clean$Year),
+                                   value = c(min(life_clean$Year), max(life_clean$Year))),
+                       selectizeInput("selected_countries", "Select Countries:", 
+                                      choices = unique(life_clean$Country),
+                                      multiple = TRUE)
+            )
+          )
         )
       )
     )
   )
 )
+)
+
 ```
+
 
 ```{r}
 server <- function(input, output) {
   # Selected countries
-  selected_countries <- reactive({
-    req(input$selected_countries)
-    filter(life_clean, Country %in% input$selected_countries)
-  })
-
-  # Rendering the graph
-  output$life_expectancy_plot <- renderPlot({
-    static_plot <- ggplot(yearly_avg, aes(x = Year, y = life_expec, color = continent)) +
-      geom_line(size = 1.5) +
-      scale_color_manual(values = c("red", "#e377c2", "blue", "green", "#ff7f0e", "#bcbd22")) +
-      scale_x_continuous(
-        limits = c(2000, 2016),
-        breaks = seq(2000, 2015, by = 2)
-      ) +
-      labs(
-        title = "Life Expectancy by Year and Continent",
-        x = "Year",
-        y = "Average Life Expectancy",
-        color = "Continent"
-      ) +
-      geom_hline(
-        yintercept = mean(yearly_avg$life_expec),
-        linetype = "solid",
-        color = "grey20",
-        alpha = 0.6
-      ) +
-      geom_text(
-        data = yearly_avg[yearly_avg$Year == 2015, ],
-        aes(label = paste(round(life_expec), " years")),
-        vjust = 0,
-        hjust = 0,
-        size = 3
-      ) +
-      theme(
-        panel.background = element_rect(fill = "white"),
-        panel.grid.major = element_line(color = "lightgrey", size = 0.5),
-        panel.grid.minor = element_blank(),
-        axis.line = element_line(colour = "black"),
-        text = element_text(size = 12, face = "bold")
-      ) +
-      guides(color = guide_legend(keywidth = 2, title.position = "top", title.vjust = -0.5)) +
-      theme(legend.position = "top", legend.box = "vertical")
-    print(static_plot)
-  })
 
   # Rendering the table
   output$life_expectancy_table <- renderReactable({
@@ -273,6 +233,7 @@ server <- function(input, output) {
 
   # Rendering the map
   output$life_expectancy_map <- renderLeaflet({
+    # Note: Define merged_data
     map <- leaflet() %>%
       addTiles() %>%
       setView(lng = 0, lat = 30, zoom = 2) %>%
@@ -292,16 +253,33 @@ server <- function(input, output) {
       )
     map
   })
+  
+  
+   output$life_expectancy_plot <- renderPlot({
+    # Get the selected countries, continents, and year range from the input
+    selected_countries <- input$selected_countries
+    year_range <- input$year_range
 
-  # Rendering the additional plot 1
-  output$developed_plot_1 <- renderPlot({
-    devdp1 <- ggplot(selected_countries(), aes(Year, life_expec)) +
-      geom_smooth(aes(color = Country), se = FALSE, show.legend = FALSE) +
-      facet_grid(Country ~ .)
-    print(devdp1)
+    # Filter the data based on user input
+    filtered_data <- life_clean %>%
+      filter(Country %in% selected_countries,
+             Year >= year_range[1] & Year <= year_range[2])
+
+    # Plot the life expectancy over the years for the selected data
+    ggplot(filtered_data, aes(x = Year, y = life_expec, color = Country)) +
+      geom_line(size = 1.5) +
+      labs(
+        title = "Life Expectancy Over Time",
+        x = "Year",
+        y = "Life Expectancy",
+        color = "Country"
+      ) +
+      theme_minimal() +
+      theme(legend.position = "bottom")
   })
-}
 
+
+}
 # Run the app
 shinyApp(ui = ui, server = server)
 ```
