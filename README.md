@@ -1,6 +1,8 @@
 
 # 🌍 Project Title: Life Expectancy Analysis and Dashboard
 
+<a href="https://lifeexpec.shinyapps.io/Vanya/" style="font-size: 24px; font-weight: bold;">Click here to visit the Life Expectancy Visualization</a>
+
 ## 🚀 Introduction
 Welcome to the Life Expectancy Analysis project, a solo project undertaken as part of the EmLyon Business School curriculum. The project focuses on analyzing global life expectancy data, emphasizing the impact of immunization, mortality, economic, and social factors. The dataset, named `LifeExpectancy_WHO`, encompasses health-related information for 193 countries from the years 2000 to 2015.
 
