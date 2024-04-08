@@ -1,5 +1,9 @@
 ```{r}
 library("shinyjs")
+library(htmlwidgets)
+library(shiny)
+library(shinydashboard)
+library(shinyWidgets)
 ```
 
 
@@ -16,6 +20,14 @@ library(sf)
 library(shinydashboard)
 load('life_clean.RData')
 ```
+
+
+```{r}
+world_geojson_url <- "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson"
+world_geojson <- sf::st_read(world_geojson_url)
+```
+
+
 ```{r}
 #Calculating the means of the life expec for each country since we have info for 15 years and i want to show only 1 number on my map
 country_means <- life_clean %>%
@@ -36,11 +48,12 @@ life_clean <- life_clean %>%
 ```{r}
 #In my dataset, several countries were called differently than they are called on the map that I downloaded from sf package, so I had to change their names manually
 mapping_table <- data.frame(
-  original_name = c("Russian Federation", "Iran (Islamic Republic of)",'Republic of Korea','Syrian Arab Republic', 'United Kingdom of Great Britain and Northern Ireland'),  # Add other country names as needed
-  map_name = c("Russia", "Iran",'South Korea','Syria', 'United Kindom')  # Corresponding names in the GeoJSON map
+  original_name = c("Russian Federation", "Iran (Islamic Republic of)",'Republic of Korea','Syrian Arab Republic', 'United Kingdom of Great Britain and Northern Ireland', 'Bolivia (Plurinational State of)', 'Venezuela (Bolivarian Republic of)', "(Democratic People's Republic of Korea)"),  # Add other country names as needed
+  map_name = c("Russia", "Iran",'South Korea','Syria', 'United Kingdom', 'Bolivia','Venezuela', 'North Korea')  # Corresponding names in the GeoJSON map
 )
 
 ```
+
 ```{r}
 life_clean <- life_clean %>%
   left_join(mapping_table, by = c("Country" = "original_name")) %>%
@@ -49,15 +62,21 @@ life_clean <- life_clean %>%
 
 ```
 
-```{r}
-# Now i have my map
-world_geojson_url <- "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson"
-world_geojson <- sf::st_read(world_geojson_url)
-color_scale <- colorNumeric(palette = "RdYlBu", domain = merged_data$life_expec)
-```
+
+
 ```{r}
 merged_data <- merge(world_geojson, life_clean, by.x = "ADMIN", by.y = "mapped_name", all.x = TRUE)
 ```
+
+```{r}
+color_scale <- colorNumeric(palette = "RdYlBu", domain = merged_data$life_expec)
+```
+
+
+```{r}
+merged_data <- merge(world_geojson, life_clean, by.x = "ADMIN", by.y = "mapped_name", all.x = TRUE)
+```
+
 
 
 ```{r}
@@ -112,11 +131,31 @@ ui <- dashboardPage(
   dashboardHeader(title = "Life Expectancy Dashboard"),
   dashboardSidebar(
     sidebarMenu(
+      menuItem("Introduction", tabName = "introduction", icon = icon("info")),
+      menuItem("Data Insights", tabName = "insights", icon = icon("lightbulb")),
       menuItem("Visualization", tabName = "visualization", icon = icon("chart-bar"))
     )
   ),
   dashboardBody(
     tabItems(
+      # Introduction tab
+      tabItem(
+        tabName = "introduction",
+        fluidRow(
+          box(
+            width = 12,
+            title = "Introduction to Life Expectancy Dashboard",
+            background = "light-blue",
+            align = "center",
+            tags$img(src = "https://i0.wp.com/southernmarylandchronicle.com/wp-content/uploads/2022/01/Life-Expectancy.png?w=1200&ssl=1", width = "50%"),
+            tags$h2("Welcome to the Life Expectancy Dashboard! 🌍"),
+            tags$p("This dashboard provides visualizations and insights into life expectancy data."),
+            tags$p("Explore life expectancy trends across countries and continents."),
+            tags$p("Use the Visualization tab to interact with the data."),
+            tags$p("Powered by Shiny and R.")
+          )
+        )
+      ),
       # Visualization tab
       tabItem(
         tabName = "visualization",
@@ -126,17 +165,86 @@ ui <- dashboardPage(
             title = "Visualization",
             navbarPage(
               "Tabs",
-              tabPanel("Life Expectancy Table", reactableOutput("life_expectancy_table")),
-              tabPanel("Life Expectancy Map", leafletOutput("life_expectancy_map")),
+              tabPanel("Life Expectancy Table", 
+                       fluidRow(
+                         reactableOutput("life_expectancy_table"),
+                         downloadButton("download_table", "Download CSV")
+                       )
+              ),
+              tabPanel("Life Expectancy Map", 
+                       fluidRow(
+                         leafletOutput("life_expectancy_map"),
+                         selectInput("selected_continent", "Select Continent:",
+                                     choices = c("All", unique(merged_data$continent))),
+                       )
+              ),
               tabPanel("Life Expectancy Plot", 
-                       plotOutput("life_expectancy_plot"),
-                       sliderInput("year_range", "Select Year Range:",
-                                   min = min(life_clean$Year),
-                                   max = max(life_clean$Year),
-                                   value = c(min(life_clean$Year), max(life_clean$Year))),
-                       selectizeInput("selected_countries", "Select Countries:", 
-                                      choices = unique(life_clean$Country),
-                                      multiple = TRUE)
+                       fluidRow(
+                         plotOutput("life_expectancy_plot"),
+                         sliderInput("year_range", "Select Year Range:",
+                                     min = min(life_clean$Year),
+                                     max = max(life_clean$Year),
+                                     value = c(min(life_clean$Year), max(life_clean$Year))),
+                         selectizeInput("selected_countries", "Select Countries:", 
+                                        choices = unique(life_clean$Country),
+                                        multiple = TRUE)
+                       )
+              )
+            )
+          )
+        )
+      ),
+      # Data Insights tab
+      tabItem(
+        tabName = "insights",
+        fluidRow(
+          box(
+            width = 12,
+            title = "Data Insights",
+            background = "aqua",
+            align = "center",
+            tags$h2("Key Data Insights"),
+            tags$p("Explore summary statistics and key insights from the life expectancy data."),
+            fluidRow(
+              infoBox("Mean Life Expectancy", 
+                      div(
+                        style = "color: black; text-align: center;",
+                        "Mean Life Expectancy",
+                        br(),
+                        round(mean(life_clean$life_expec), 2)
+                      ), 
+                      icon = icon("heartbeat"), 
+                      color = "blue"),
+              infoBox("Average Infant Deaths", 
+                      div(
+                        style = "color: black; text-align: center;",
+                        "Average Infant Deaths",
+                        br(),
+                        round(mean(life_clean$inf_deaths), 2)
+                      ), 
+                      icon = icon("child"), 
+                      color = "red"),
+              infoBox("Average Alcohol Consumption", 
+                      div(
+                        style = "color: black; text-align: center;",
+                        "Average Alcohol Consumption",
+                        br(),
+                        round(mean(life_clean$Alcohol), 2)
+                      ), 
+                      icon = icon("glass-martini"), 
+                      color = "green")
+            ),
+            fluidRow(
+              box(
+                title = "Summary Statistics",
+                width = 4,
+                solidHeader = TRUE,
+                background = "light-blue",
+                "Mean Life Expectancy: ", round(mean(life_clean$life_expec), 2), br(),
+                "Median Life Expectancy: ", round(median(life_clean$life_expec), 2), br(),
+                "Minimum Life Expectancy: ", round(min(life_clean$life_expec), 2), br(),
+                "Maximum Life Expectancy: ", round(max(life_clean$life_expec), 2)
+              )
             )
           )
         )
@@ -144,15 +252,12 @@ ui <- dashboardPage(
     )
   )
 )
-)
-
 ```
 
 
 ```{r}
 server <- function(input, output) {
-  # Selected countries
-
+  
   # Rendering the table
   output$life_expectancy_table <- renderReactable({
     tbl <- reactable(
@@ -229,42 +334,50 @@ server <- function(input, output) {
     )
     tbl
   })
-
-
+  
   # Rendering the map
   output$life_expectancy_map <- renderLeaflet({
-    # Note: Define merged_data
+    # Filter data by selected continent
+    filtered_data <- if (input$selected_continent != "All") {
+      merged_data %>%
+        filter(continent == input$selected_continent)
+    } else {
+      merged_data
+    }
+    
+    # Create map
     map <- leaflet() %>%
       addTiles() %>%
       setView(lng = 0, lat = 30, zoom = 2) %>%
       addPolygons(
-        data = merged_data,
+        data = filtered_data,
         fillColor = ~color_scale(life_expec),
         fillOpacity = 0.7,
         color = "white",
         weight = 1,
         opacity = 1,
         popup = ~paste(
-          "Country: ", Country,
-          "<br>Life Expectancy: ", round(life_expec, 2),
-          "<br>Alcohol Consumption: ", round(Alcohol, 2),
-          "<br>inf_deaths: ", round(inf_deaths, 2)
+          "<b>Country:</b> ", Country,
+          "<br><b>Life Expectancy:</b> ", round(life_expec, 2),
+          "<br><b>Alcohol Consumption:</b> ", round(Alcohol, 2),
+          "<br><b>Infant Deaths:</b> ", round(inf_deaths, 2)
         )
       )
+    
     map
   })
   
-  
-   output$life_expectancy_plot <- renderPlot({
+  # Rendering the plot
+  output$life_expectancy_plot <- renderPlot({
     # Get the selected countries, continents, and year range from the input
     selected_countries <- input$selected_countries
     year_range <- input$year_range
-
+    
     # Filter the data based on user input
     filtered_data <- life_clean %>%
       filter(Country %in% selected_countries,
              Year >= year_range[1] & Year <= year_range[2])
-
+    
     # Plot the life expectancy over the years for the selected data
     ggplot(filtered_data, aes(x = Year, y = life_expec, color = Country)) +
       geom_line(size = 1.5) +
@@ -277,9 +390,18 @@ server <- function(input, output) {
       theme_minimal() +
       theme(legend.position = "bottom")
   })
-
-
+  
+  # Downloading the table as CSV
+  output$download_table <- downloadHandler(
+    filename = function() {
+      paste("life_expectancy_data", ".csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(tab, file, row.names = FALSE)
+    }
+  )
 }
-# Run the app
+
+# Run the application
 shinyApp(ui = ui, server = server)
 ```
